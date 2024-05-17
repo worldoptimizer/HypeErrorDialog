@@ -13,7 +13,7 @@ The **Hype Error Dialog Extension** is a JavaScript extension for Tumult Hype th
 ## Installation
 
 1. **Add the Extension File to Your Hype Project:**
-   - Upload the `HypeErrorDialog.js` file to the Hype Resources Library.
+   - Download the `HypeErrorDialog.js` file and add it to the Hype Resources Library.
 
 ## Usage
 
