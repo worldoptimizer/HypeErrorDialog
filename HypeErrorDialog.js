@@ -6,8 +6,8 @@
 /*
  * Version-History
  * 1.0.0 Initial release under MIT-license
+ * 1.0.1 Better formating for Hype Errors
  */
-
 
 // Ensure the extension isn't redefined
 if ("HypeErrorDialog" in window === false) {
@@ -42,16 +42,15 @@ if ("HypeErrorDialog" in window === false) {
             return key ? _default[key] : _default;
         }
         
-        // Function to format Hype function code
-        function formatHypeFunction(code) {
-            const hypeFunctionPattern = /\(function\(\)\{return function\(hypeDocument, element, event\) \{([\s\S]*?)\}\}\)\(\)/;
-            const match = code.match(hypeFunctionPattern);
-            if (match) {
-                return `function(hypeDocument, element, event) {\n${match[1]}\n}`;
+          // Function to format Hype function code
+        function formatHypeFunction(functionName, code) {
+            const match = code.match(/\(function\(\)\{return function\(hypeDocument, element, event\) \{([\s\S]*?)\}\}\)\(\);/);
+            if (match && match[1]) {
+                const functionBody = match[1]
+                return `${functionName} (hypeDocument, element, event) {\n${functionBody}\n}`;
             }
             return code;
         }
-
         /**
          * This function determines if we are in a Hype Preview.
          *
@@ -134,7 +133,7 @@ if ("HypeErrorDialog" in window === false) {
             }
 
 	        // Function to show the custom error dialog
-	        function showErrorDialog(message, source, lineno, colno, error) {
+	        function showErrorDialog(message, source, lineno, colno, error, docName = '', funcName = '') {
 	            // Remove any existing error dialog
 	            const existingDialog = document.querySelector('.custom-error-dialog');
 	            if (existingDialog) {
@@ -146,9 +145,6 @@ if ("HypeErrorDialog" in window === false) {
 	            overlay.className = 'error-overlay';
 	            document.body.appendChild(overlay);
 	
-	            // Format the source code if it matches the Hype function pattern
-	            const formattedSource = formatHypeFunction(source);
-	
 	            // Create the error dialog
 	            const errorDialog = document.createElement('div');
 	            errorDialog.className = 'custom-error-dialog';
@@ -156,10 +152,14 @@ if ("HypeErrorDialog" in window === false) {
 	                <button class="close-btn" onclick="document.querySelector('.custom-error-dialog').remove(); document.querySelector('.error-overlay').remove();">&times;</button>
 	                <h2>JavaScript Error</h2>
 	                <p><strong>Message:</strong> ${message}</p>
-	                <p><strong>Source:</strong> ${formattedSource || 'N/A'}</p>
-	                <p><strong>Line:</strong> ${lineno || 'N/A'}</p>
-	                <p><strong>Column:</strong> ${colno || 'N/A'}</p>
-	                <pre><strong>Error Object:</strong>\n${error ? error.stack : 'N/A'}</pre>
+	                ${docName ? `<p><strong>Hype Document:</strong> ${docName}</p>` : ''}
+	                ${funcName ? `<p><strong>Hype Function:</strong> ${funcName}</p>` : ''}
+	                <p><strong>Source:</strong></p>
+	                <pre>${source || 'N/A'}</pre>
+	                ${lineno ? `<p><strong>Line:</strong> ${lineno}</p>` : ''}
+	                ${colno ? `<p><strong>Column:</strong> ${colno}</p>` : ''}
+	                <p><strong>Error Object:</strong></p>
+	                <pre style="overflow-x: auto; white-space: pre;">${error ? error.stack : 'N/A'}</pre>
 	            `;
 	            document.body.appendChild(errorDialog);
 	        }
@@ -170,15 +170,77 @@ if ("HypeErrorDialog" in window === false) {
             // Store the original eval function
             const originalEval = window.eval;
 
+            // Generate a unique ID for the error
+            function generateUniqueId() {
+                return 'error-' + Math.random().toString(36).substr(2, 9);
+            }
+
+            // Scan Hype documents for functions with specific ID
+            function scanHypeDocumentsForId(id) {
+                var hypeDocs = window.HYPE.documents;
+                for (var docName in hypeDocs) {
+                    var hypeDoc = hypeDocs[docName];
+                    var functions = hypeDoc.functions();
+                    for (var funcName in functions) {
+                        if (functions.hasOwnProperty(funcName)) {
+                            var func = functions[funcName];
+                            var funcString = func.toString();
+                            if (funcString.indexOf(id) !== -1) {
+                                return {
+                                    docName: docName,
+                                    functionName: funcName,
+                                    functionString: funcString
+                                };
+                            }
+                        }
+                    }
+                }
+                return null;
+            }
+
+            // Check if a function is a Hype function
+            function isHypeFunction(code) {
+                return /\(function\(\)\{return function\(hypeDocument, element, event\) \{/.test(code);
+            }
+
             // Override the eval function
             window.eval = function (code) {
-                try {
-                    // Attempt to evaluate the code using the original eval
-                    return originalEval(code);
-                } catch (error) {
-                    // Show the custom error dialog
-                    showErrorDialog(error.message, code, '', '', error);
-                    throw error; // Re-throw the error to ensure normal error propagation
+                const id = generateUniqueId();
+                let codeToEval = code;
+
+                if (isHypeFunction(code)) {
+
+                    // Try to evaluate the code
+                    try {
+                        return originalEval(codeToEval);
+                    } catch (error) {
+                        // Return a function with the unique ID comment instead of throwing an error
+                        const errorFunction = new Function(`/*${id}*/`);
+                        
+                        // Delay the dialog display to allow for the eval assignment
+                        requestAnimationFrame(function() {
+                            const result = scanHypeDocumentsForId(id);
+                            let originalSource = code;  // Use original source code
+                            let docName = '';
+                            let funcName = '';
+                            if (result) {
+                                docName = result.docName;
+                                funcName = result.functionName;
+                            }
+                            // Show the custom error dialog
+                            showErrorDialog(error.message, formatHypeFunction(funcName, originalSource), '', '', error, docName, funcName);
+                        });
+
+                        return errorFunction;
+                    }
+                } else {
+                    // Regular JavaScript function
+                    try {
+                        return originalEval(code);
+                    } catch (error) {
+                        showErrorDialog(error.message, code, '', '', error);
+                        throw error;
+                    }
                 }
             };
 
@@ -190,11 +252,12 @@ if ("HypeErrorDialog" in window === false) {
 
         // Public API for the extension
         return {
-            version: '1.0.0',
+            version: '1.0.1',
             setDefault: setDefault,
             getDefault: getDefault,
             isHypePreview: isHypePreview,
-            isHypeIDE: isHypeIDE
+            isHypeIDE: isHypeIDE,
+            showErrorDialog: showErrorDialog
         };
 
     })();
