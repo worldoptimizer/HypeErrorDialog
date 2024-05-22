@@ -7,6 +7,7 @@
  * Version-History
  * 1.0.0 Initial release under MIT-license
  * 1.0.1 Better formating for Hype Errors
+ * 1.0.2 Better formating for regular JavaScript Errors
  */
 
 // Ensure the extension isn't redefined
@@ -248,11 +249,13 @@ if ("HypeErrorDialog" in window === false) {
             window.onerror = function (message, source, lineno, colno, error) {
                 showErrorDialog(message, source, lineno, colno, error);
             };
+            
+
         }
 
         // Public API for the extension
         return {
-            version: '1.0.1',
+            version: '1.0.2',
             setDefault: setDefault,
             getDefault: getDefault,
             isHypePreview: isHypePreview,
@@ -261,4 +264,12 @@ if ("HypeErrorDialog" in window === false) {
         };
 
     })();
+    
+    window.onerror = function (message, source, lineno, colno, error) {
+        if (!HypeErrorDialog.isHypeIDE() && HypeErrorDialog.isHypePreview()) {
+            setTimeout(function(){
+                HypeErrorDialog.showErrorDialog(message, source, lineno, colno, error);
+            }, 1);
+        }
+    }
 }
