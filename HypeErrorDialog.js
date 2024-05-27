@@ -1,5 +1,5 @@
 /*!
- * Hype Error Dialog Extension
+ * Hype Error Dialog Extension v1.0.2
  * Copyright (2024) Max Ziebell, (https://maxziebell.de). MIT-license
  */
 
